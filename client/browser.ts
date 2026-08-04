@@ -531,6 +531,24 @@ const dpaCpro = new Map<string, any>([
     ["BookmarkButton", 0],
 ]);
 
+function createUnimplementedBrowserProxy<T extends object>(target: T): T {
+    return new Proxy(target, {
+        get(target: T, prop: string | symbol, receiver: unknown) {
+            if (typeof prop === "symbol") {
+                return Reflect.get(target, prop, receiver);
+            }
+            const value = Reflect.get(target, prop, receiver);
+            if (value !== undefined) {
+                return value;
+            }
+            return (...args: unknown[]) => {
+                console.warn(`[browser] ${prop} is not implemented`, ...args);
+                return NaN;
+            };
+        },
+    }) as T;
+}
+
 const bpa = new Map([
     ["APIGroup", new Map([
         ["Persistent.Media.Support.Ext", 0], // X_BPA_setAccessInfoOfPersistentArrayForAnotherProvider
@@ -712,7 +730,7 @@ export class BrowserAPI {
         }
     }
 
-    browser: Browser = {
+    browser: Browser = createUnimplementedBrowserProxy({
         Ureg: [...new Array(64)].map(_ => ""),
         Greg: [...new Array(64)].map(_ => ""),
         epgGetEventStartTime: (event_ref: string): Date | null => {
@@ -1322,7 +1340,7 @@ export class BrowserAPI {
             this.interpreter.destroyStack();
             throw new Error("unreachable!!");
         },
-    } as Browser;
+    } as Browser);
 
     serviceId?: number;
     public onMessage(msg: ResponseMessage) {

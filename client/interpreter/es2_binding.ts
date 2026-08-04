@@ -370,6 +370,50 @@ export function defineBrowserBinding(context: Context, resources: Resources, bro
         dontEnum: true,
         dontDelete: true
     } as const;
+
+    browser.internalProperties.get = function* browser$getDynamicAPI(ctx, _self, propertyName, caller) {
+        const key = String(propertyName);
+        const existing = browser.properties.get(key);
+        if (existing != null) {
+            return existing.value;
+        }
+        if (Object.prototype.hasOwnProperty.call(Object.prototype, key)) {
+            return undefined;
+        }
+
+        const hostValue = (browserAPI.browser as any)[key];
+        if (typeof hostValue !== "function") {
+            return hostValue;
+        }
+
+        const wrapped = newNativeFunction(context.realm.intrinsics.FunctionPrototype, function* browser$dynamicFallback(ctx2, _self2, args, caller2) {
+            const hostArgs: any[] = [];
+            for (const arg of args) {
+                if (isObject(arg)) {
+                    const dateValue = getDateObjectValue(arg);
+                    if (dateValue != null) {
+                        hostArgs.push(new Date(dateValue));
+                        continue;
+                    }
+                }
+                hostArgs.push(yield* toPrimitive(ctx2, arg, "default", caller2));
+            }
+            try {
+                return hostValue(...hostArgs);
+            } catch (e) {
+                console.error(`[browser] ${key} call failed`, e);
+                return NaN;
+            }
+        }, 0, key);
+
+        // Cache dynamic fallback functions so repeated calls behave consistently.
+        browser.properties.set(key, {
+            ...desc,
+            value: wrapped,
+        });
+        return wrapped;
+    };
+
     browser.properties.set("Ureg", {
         ...desc,
         value: ureg,

@@ -3113,6 +3113,10 @@ export function* getProperty(
         }
         o = o.internalProperties.prototype;
     }
+    // Host objects can synthesize properties dynamically (e.g. unimplemented browser APIs).
+    if (value.internalProperties.get != null) {
+        return yield* value.internalProperties.get(ctx, value, name, caller);
+    }
     return undefined;
 }
 
